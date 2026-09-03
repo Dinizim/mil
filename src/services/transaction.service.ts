@@ -217,7 +217,7 @@ export async function getLatestTransactions(limit = 5) {
     throw new Error("Usuário não autenticado");
   }
 
-  const { data, error } = await supabase
+  const { data: transactions, error: transactionsError } = await supabase
     .from("transactions")
     .select(`
       id,
@@ -225,20 +225,41 @@ export async function getLatestTransactions(limit = 5) {
       amount,
       description,
       transaction_date,
-      categories!transactions_category_owner_fk (
-        name
-      )
+      category_id,
+      created_at
     `)
     .eq("user_id", user.id)
     .order("transaction_date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (error) {
-    throw new Error(error.message);
+  if (transactionsError) {
+    throw new Error(transactionsError.message);
   }
 
-  return data;
+  const { data: categories, error: categoriesError } = await supabase
+    .from("categories")
+    .select("id, name")
+    .eq("user_id", user.id);
+
+  if (categoriesError) {
+    throw new Error(categoriesError.message);
+  }
+
+  const categoryMap = new Map(
+    categories.map((category) => [category.id, category.name])
+  );
+
+  return transactions.map((transaction) => ({
+    ...transaction,
+    categories: transaction.category_id
+      ? [
+          {
+            name: categoryMap.get(transaction.category_id) || "Sem categoria",
+          },
+        ]
+      : [],
+  }));
 }
 
 export async function getExpensesByCategory() {
@@ -252,25 +273,33 @@ export async function getExpensesByCategory() {
     throw new Error("Usuário não autenticado");
   }
 
-  const { data, error } = await supabase
+  const { data: transactions, error: transactionsError } = await supabase
     .from("transactions")
-    .select(`
-      amount,
-      categories!transactions_category_owner_fk (
-        name
-      )
-    `)
+    .select("amount, category_id")
     .eq("user_id", user.id)
     .eq("type", "expense");
 
-  if (error) {
-    throw new Error(error.message);
+  if (transactionsError) {
+    throw new Error(transactionsError.message);
   }
 
-  const grouped = data.reduce(
+  const { data: categories, error: categoriesError } = await supabase
+    .from("categories")
+    .select("id, name")
+    .eq("user_id", user.id);
+
+  if (categoriesError) {
+    throw new Error(categoriesError.message);
+  }
+
+  const categoryMap = new Map(
+    categories.map((category) => [category.id, category.name])
+  );
+
+  const grouped = transactions.reduce(
     (acc, transaction) => {
       const categoryName =
-        transaction.categories?.[0]?.name || "Sem categoria";
+        categoryMap.get(transaction.category_id) || "Sem categoria";
 
       const amount = Number(transaction.amount);
 
