@@ -1,36 +1,98 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mil
 
-## Getting Started
+> Controle financeiro pessoal simples, visual e pensado para o dia a dia.
 
-First, run the development server:
+O **Mil** é uma aplicação web de controle financeiro pessoal desenvolvida para facilitar o acompanhamento de receitas, despesas, saldo disponível e metas financeiras.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+O projeto foi construído com foco em uma experiência **mobile-first**, interface moderna e arquitetura preparada para evolução.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Preview
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+<!-- Adicione uma screenshot do projeto aqui futuramente -->
 
-## Learn More
+![Mil Preview](./public/preview.png)
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Funcionalidades
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- 🔐 Cadastro e login de usuários
+- 💰 Controle de receitas e despesas
+- 📊 Dashboard financeiro
+- 💵 Visualização de saldo total e saldo disponível
+- 🎯 Criação e acompanhamento de metas financeiras
+- 💸 Contribuições para metas
+- 🏷️ Gerenciamento de categorias
+- ✏️ Edição e exclusão de transações
+- 📱 Interface responsiva e mobile-first
+- 📲 PWA — possibilidade de instalação como aplicativo
+- 🌙 Interface dark moderna
+- 🔒 Row Level Security (RLS) no banco de dados
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Tecnologias
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Front-end
+
+- Next.js
+- React
+- TypeScript
+- Tailwind CSS
+- shadcn/ui
+- Lucide React
+- Geist
+
+### Back-end / Dados
+
+- Supabase
+- PostgreSQL
+- Supabase Auth
+- Row Level Security (RLS)
+
+### Infraestrutura
+
+- Vercel
+- Git
+- GitHub
+- Progressive Web App (PWA)
+
+---
+
+## Arquitetura
+
+A aplicação utiliza o **Next.js App Router**, separando responsabilidades entre páginas, componentes, serviços e integração com o Supabase.
+
+```text
+src/
+├── app/
+│   ├── (auth)/
+│   │   ├── login/
+│   │   └── register/
+│   │
+│   ├── (dashboard)/
+│   │   ├── dashboard/
+│   │   ├── transactions/
+│   │   ├── categories/
+│   │   ├── goals/
+│   │   └── profile/
+│   │
+│   ├── offline/
+│   └── manifest.ts
+│
+├── components/
+│   ├── navigation/
+│   └── ui/
+│
+├── lib/
+│   └── supabase/
+│
+├── services/
+│   ├── category.services.ts
+│   ├── dashboard.service.ts
+│   ├── goal.service.ts
+│   └── transaction.service.ts
+│
+└── proxy.ts
