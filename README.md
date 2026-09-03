@@ -1,36 +1,285 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mil
 
-## Getting Started
+Controle financeiro pessoal simples, visual e moderno.
 
-First, run the development server:
+O **Mil** é uma aplicação web para controle financeiro pessoal, permitindo acompanhar receitas, despesas, saldo, categorias e metas financeiras em um único lugar.
+
+O projeto foi desenvolvido com foco em uma experiência **mobile-first**, interface moderna e arquitetura preparada para evolução.
+
+## Funcionalidades
+
+- Cadastro e login de usuários
+- Controle de receitas e despesas
+- Dashboard financeiro
+- Visualização do saldo total
+- Visualização do saldo disponível e reservado
+- Criação e acompanhamento de metas
+- Contribuições para metas financeiras
+- Gerenciamento de categorias
+- Edição e exclusão de transações
+- Perfil do usuário
+- Interface responsiva
+- Navegação mobile
+- PWA
+- Página offline
+- Row Level Security (RLS)
+
+## Tecnologias
+
+### Front-end
+
+- Next.js
+- React
+- TypeScript
+- Tailwind CSS
+- shadcn/ui
+- Lucide React
+- Geist
+
+### Back-end e banco de dados
+
+- Supabase
+- PostgreSQL
+- Supabase Auth
+- Row Level Security (RLS)
+
+### Infraestrutura
+
+- Vercel
+- Git
+- GitHub
+- Progressive Web App (PWA)
+
+## Arquitetura
+
+O projeto utiliza o **Next.js App Router**, com separação entre páginas, componentes, serviços e integração com o Supabase.
+
+```text
+src/
+├── app/
+│   ├── (auth)/
+│   │   ├── login/
+│   │   └── register/
+│   │
+│   ├── (dashboard)/
+│   │   ├── dashboard/
+│   │   ├── transactions/
+│   │   ├── categories/
+│   │   ├── goals/
+│   │   └── profile/
+│   │
+│   ├── offline/
+│   └── manifest.ts
+│
+├── components/
+│   ├── navigation/
+│   └── ui/
+│
+├── lib/
+│   └── supabase/
+│
+├── services/
+│   ├── category.services.ts
+│   ├── dashboard.service.ts
+│   ├── goal.service.ts
+│   └── transaction.service.ts
+│
+└── proxy.ts
+```
+
+## Banco de dados
+
+O Mil utiliza PostgreSQL através do Supabase.
+
+Principais entidades:
+
+```text
+auth.users
+     |
+     v
+ profiles
+     |
+     +-------------+
+     |             |
+     v             v
+categories       goals
+     |             |
+     v             v
+transactions   goal_contributions
+```
+
+### Principais tabelas
+
+- `profiles`
+- `categories`
+- `transactions`
+- `goals`
+- `goal_contributions`
+
+O banco utiliza **Row Level Security (RLS)** para garantir que cada usuário tenha acesso somente aos seus próprios dados.
+
+## Autenticação
+
+A autenticação é realizada utilizando o **Supabase Auth**.
+
+Fluxo principal:
+
+```text
+Cadastro
+   |
+   v
+Supabase Auth
+   |
+   v
+Profile
+   |
+   v
+Login
+   |
+   v
+Dashboard protegido
+```
+
+As sessões são utilizadas para proteger as áreas autenticadas da aplicação.
+
+## Regras financeiras
+
+O Mil diferencia o saldo financeiro das reservas destinadas às metas.
+
+### Saldo total
+
+```text
+Receitas - Despesas
+```
+
+### Saldo reservado
+
+```text
+Contribuições de metas ativas
+```
+
+### Saldo disponível
+
+```text
+Saldo total - Saldo reservado
+```
+
+As contribuições para metas não são registradas como despesas. Dessa forma, o sistema mantém separado o histórico de movimentações e o dinheiro reservado para objetivos financeiros.
+
+## PWA
+
+O Mil possui suporte a **Progressive Web App (PWA)**.
+
+A aplicação conta com:
+
+- Web App Manifest
+- Service Worker
+- Ícones para instalação
+- Página offline
+- Suporte à instalação como aplicativo
+- Interface adaptada para dispositivos móveis
+
+## Como executar o projeto
+
+### 1. Clone o repositório
+
+```bash
+git clone https://github.com/Dinizim/mil.git
+```
+
+### 2. Entre na pasta
+
+```bash
+cd mil
+```
+
+### 3. Instale as dependências
+
+```bash
+npm install
+```
+
+### 4. Configure as variáveis de ambiente
+
+Crie um arquivo chamado:
+
+```text
+.env.local
+```
+
+Utilize o arquivo `.env.example` como referência.
+
+Configure as credenciais do seu projeto Supabase.
+
+> O arquivo `.env.local` não deve ser enviado para o GitHub.
+
+### 5. Execute o projeto
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+A aplicação estará disponível em:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Build de produção
 
-## Learn More
+Para gerar o build:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Para executar a aplicação:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm start
+```
 
-## Deploy on Vercel
+## Roadmap
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- [x] Autenticação
+- [x] Dashboard financeiro
+- [x] Transações
+- [x] Categorias
+- [x] Metas financeiras
+- [x] Perfil
+- [x] Navegação mobile
+- [x] PWA
+- [ ] Deploy em produção
+- [ ] Melhorias nos relatórios
+- [ ] Testes automatizados
+- [ ] Melhorias de performance
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Objetivo do projeto
+
+Além de ser uma aplicação de controle financeiro, o Mil também é um projeto de estudo e portfólio voltado para desenvolvimento **full-stack moderno**.
+
+O projeto busca aplicar na prática conceitos como:
+
+- Next.js
+- TypeScript
+- PostgreSQL
+- Autenticação
+- Controle de acesso
+- RLS
+- Server Components
+- Client Components
+- Organização por serviços
+- Desenvolvimento responsivo
+- PWA
+- Git e GitHub
+- Deploy em produção
+
+## Autor
+
+**Nicollas Diniz Fernandes**
+
+Desenvolvedor Back-end / Full-stack
+
+## Licença
+
+Este projeto está em desenvolvimento e é utilizado como projeto de estudo e portfólio.
