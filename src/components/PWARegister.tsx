@@ -7,16 +7,14 @@ export default function PWARegister() {
     if (process.env.NODE_ENV !== "production") return;
     if (!("serviceWorker" in navigator)) return;
 
-    const register = async () => {
-      try {
-        await navigator.serviceWorker.register("/sw.js", { scope: "/" });
-      } catch (error) {
-        console.error("Falha ao registrar o Service Worker do Mil:", error);
-      }
-    };
-
-    window.addEventListener("load", register, { once: true });
-    return () => window.removeEventListener("load", register);
+    navigator.serviceWorker
+      .register("/sw.js", { scope: "/" })
+      .then((registration) => {
+        console.log("Service Worker registrado:", registration.scope);
+      })
+      .catch((error) => {
+        console.error("Falha ao registrar o Service Worker:", error);
+      });
   }, []);
 
   return null;
