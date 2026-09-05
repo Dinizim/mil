@@ -2,6 +2,7 @@
 
 import { LoaderCircle, Plus, X } from "lucide-react";
 import { useEffect, useId, useState } from "react";
+import { getClientErrorMessage } from "@/lib/errors";
 
 import { createCategoryAction } from "./actions";
 
@@ -58,7 +59,7 @@ export default function CategoryForm({ defaultType = "expense", variant = "heade
       setType(defaultType);
       setIsOpen(false);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Não foi possível criar a categoria.");
+      setErrorMessage(getClientErrorMessage(error, "Não foi possível criar a categoria."));
     } finally {
       setIsSubmitting(false);
     }

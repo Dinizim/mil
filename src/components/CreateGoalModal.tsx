@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoaderCircle, Target, X } from "lucide-react";
 import { createGoalAction } from "@/app/(dashboard)/goals/actions";
+import { getClientErrorMessage } from "@/lib/errors";
 
 type Props = {
   isOpen: boolean;
@@ -89,9 +90,7 @@ export default function CreateGoalModal({
       console.error(error);
 
       setError(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível criar a meta."
+        getClientErrorMessage(error, "Não foi possível criar a meta.")
       );
     } finally {
       setIsSubmitting(false);

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/client";
+import { getClientErrorMessage } from "@/lib/errors";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -24,7 +25,7 @@ export default function RegisterPage() {
 
     const supabase = createClient();
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -35,7 +36,13 @@ export default function RegisterPage() {
     });
 
     if (error) {
-      setMessage(error.message);
+      setMessage(getClientErrorMessage(error, "Não foi possível criar a conta."));
+      setLoading(false);
+      return;
+    }
+
+    if (!data.session) {
+      setMessage("Conta criada. Verifique seu e-mail para confirmar o cadastro antes de entrar.");
       setLoading(false);
       return;
     }

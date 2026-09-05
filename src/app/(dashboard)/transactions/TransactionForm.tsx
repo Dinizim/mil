@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { createTransactionAction } from "./actions";
 import CategoryForm from "./CategoryForm";
+import { getClientErrorMessage } from "@/lib/errors";
 type Category = {
   id: string;
   name: string;
@@ -16,6 +17,7 @@ type Props = {
 
 export default function TransactionForm({ categories }: Props) {
   const [open, setOpen] = useState(false);
+  const [availableCategories, setAvailableCategories] = useState(categories);
 
   const [type, setType] = useState<"income" | "expense">("expense");
   const [amount, setAmount] = useState("");
@@ -29,7 +31,7 @@ export default function TransactionForm({ categories }: Props) {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const filteredCategories = categories.filter(
+  const filteredCategories = availableCategories.filter(
     (category) => category.type === type
   );
 
@@ -69,13 +71,10 @@ export default function TransactionForm({ categories }: Props) {
       setCategoryId("");
 
       closeModal();
-
-      setErrorMessage("Transação criada com sucesso! 🎉");
+      setErrorMessage("");
     } catch (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Erro ao criar transação."
+        getClientErrorMessage(error, "Não foi possível criar a transação.")
       );
     } finally {
       setLoading(false);
@@ -261,9 +260,10 @@ export default function TransactionForm({ categories }: Props) {
       )}
       {categoryModalOpen && (
         <CategoryForm
-          type="expense"
-          onCategoryCreated={(categoryId) => {
-            setCategoryId(categoryId);
+          type={type}
+          onCategoryCreated={(category) => {
+            setAvailableCategories((current) => [...current, category]);
+            setCategoryId(category.id);
             setCategoryModalOpen(false);
           }}
           onClose={() => setCategoryModalOpen(false)}

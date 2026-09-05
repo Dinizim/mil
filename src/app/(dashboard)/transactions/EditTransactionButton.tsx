@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoaderCircle, Pencil, X } from "lucide-react";
+import { getClientErrorMessage } from "@/lib/errors";
 
 import { updateTransactionAction } from "./actions";
 
@@ -164,9 +165,7 @@ export default function EditTransactionButton({
       router.refresh();
     } catch (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Erro ao atualizar transação."
+        getClientErrorMessage(error, "Não foi possível atualizar a transação.")
       );
     } finally {
       setLoading(false);

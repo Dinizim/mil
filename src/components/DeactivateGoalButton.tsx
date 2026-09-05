@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, LoaderCircle } from "lucide-react";
+import { getClientErrorMessage } from "@/lib/errors";
 
 import { deactivateGoalAction } from "@/app/(dashboard)/goals/actions";
 
@@ -32,9 +33,7 @@ export default function DeactivateGoalButton({
       console.error(error);
 
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível desativar a meta."
+        getClientErrorMessage(error, "Não foi possível desativar a meta.")
       );
     } finally {
       setIsSaving(false);

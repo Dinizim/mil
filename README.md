@@ -16,7 +16,7 @@ O projeto foi desenvolvido com foco em uma experiência **mobile-first**, interf
 - Criação e acompanhamento de metas
 - Contribuições para metas financeiras
 - Gerenciamento de categorias
-- Edição e exclusão de transações
+- Edição de transações e cancelamento com soft delete
 - Perfil do usuário
 - Interface responsiva
 - Navegação mobile
@@ -283,3 +283,8 @@ Desenvolvedor Back-end / Full-stack
 ## Licença
 
 Este projeto está em desenvolvimento e é utilizado como projeto de estudo e portfólio.
+
+
+## Integridade e histórico
+
+O MVP usa soft delete em transações e categorias. Registros cancelados/arquivados permanecem no banco para preservar o histórico e permitir uma futura área de auditoria e relatórios de cancelamentos. Os fluxos normais exibem somente registros ativos.

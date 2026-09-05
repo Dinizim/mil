@@ -1,15 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
+import { appError, databaseErrorMessage } from "@/lib/errors";
 
-export async function getTransactions() {
+async function getAuthenticatedUser() {
   const supabase = await createClient();
-
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    throw new Error("Usuário não autenticado");
-  }
+  if (!user) throw appError("Usuário não autenticado.");
+
+  return { supabase, user };
+}
+
+export async function getTransactions() {
+  const { supabase, user } = await getAuthenticatedUser();
 
   const { data, error } = await supabase
     .from("transactions")
@@ -21,29 +25,21 @@ export async function getTransactions() {
       transaction_date,
       category_id,
       categories!transactions_category_owner_fk (
-      name
-     )
+        name
+      )
     `)
     .eq("user_id", user.id)
-    .order("transaction_date", { ascending: false });
+    .is("deleted_at", null)
+    .order("transaction_date", { ascending: false })
+    .order("created_at", { ascending: false });
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw appError(databaseErrorMessage(error, "Não foi possível carregar as transações."));
 
   return data;
 }
 
 export async function getTransactionById(id: string) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Usuário não autenticado");
-  }
+  const { supabase, user } = await getAuthenticatedUser();
 
   const { data, error } = await supabase
     .from("transactions")
@@ -57,15 +53,56 @@ export async function getTransactionById(id: string) {
     `)
     .eq("id", id)
     .eq("user_id", user.id)
+    .is("deleted_at", null)
     .single();
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw appError(databaseErrorMessage(error, "Transação não encontrada."));
 
   return data;
 }
 
+async function validateCategoryForTransaction(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  categoryId: string,
+  type: "income" | "expense"
+) {
+  const { data: category, error } = await supabase
+    .from("categories")
+    .select("id, type")
+    .eq("id", categoryId)
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .single();
+
+  if (error || !category) throw appError("A categoria selecionada não está disponível.");
+  if (category.type !== type) throw appError("A categoria não pertence ao tipo da transação.");
+}
+
+function validateAmount(amount: number) {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw appError("Informe um valor maior que zero.");
+  }
+
+  if (Math.round(amount * 100) !== amount * 100) {
+    throw appError("O valor deve ter no máximo 2 casas decimais.");
+  }
+}
+
+function validateDate(transactionDate: string) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(transactionDate) ||
+    Number.isNaN(Date.parse(`${transactionDate}T00:00:00`))
+  ) {
+    throw appError("Informe uma data válida.");
+  }
+}
+
+function validateDescription(description: string) {
+  if (description.length > 200) {
+    throw appError("A descrição deve ter no máximo 200 caracteres.");
+  }
+}
 
 export async function createTransaction(
   type: "income" | "expense",
@@ -74,15 +111,15 @@ export async function createTransaction(
   categoryId: string,
   transactionDate: string
 ) {
-  const supabase = await createClient();
+  const { supabase, user } = await getAuthenticatedUser();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  if (type !== "income" && type !== "expense") throw appError("Tipo de transação inválido.");
+  validateAmount(amount);
+  validateDate(transactionDate);
+  validateDescription(description);
+  if (!categoryId) throw appError("Selecione uma categoria.");
 
-  if (!user) {
-    throw new Error("Usuário não autenticado");
-  }
+  await validateCategoryForTransaction(supabase, user.id, categoryId, type);
 
   const { data, error } = await supabase
     .from("transactions")
@@ -90,16 +127,14 @@ export async function createTransaction(
       user_id: user.id,
       type,
       amount,
-      description,
+      description: description.trim() || null,
       category_id: categoryId,
       transaction_date: transactionDate,
     })
     .select()
     .single();
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw appError(databaseErrorMessage(error, "Não foi possível criar a transação."));
 
   return data;
 }
@@ -112,266 +147,180 @@ export async function updateTransaction(
   categoryId: string,
   transactionDate: string
 ) {
-  const supabase = await createClient();
+  const { supabase, user } = await getAuthenticatedUser();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  if (type !== "income" && type !== "expense") throw appError("Tipo de transação inválido.");
+  validateAmount(amount);
+  validateDate(transactionDate);
+  validateDescription(description);
+  if (!categoryId) throw appError("Selecione uma categoria.");
 
-  if (!user) {
-    throw new Error("Usuário não autenticado");
-  }
+  await validateCategoryForTransaction(supabase, user.id, categoryId, type);
 
   const { data, error } = await supabase
     .from("transactions")
     .update({
       type,
       amount,
-      description,
+      description: description.trim() || null,
       category_id: categoryId,
       transaction_date: transactionDate,
     })
     .eq("id", id)
     .eq("user_id", user.id)
+    .is("deleted_at", null)
     .select()
     .single();
 
-  if (error) {
-    throw new Error(error.message);
+  if (error) throw appError(databaseErrorMessage(error, "Não foi possível atualizar a transação."));
+
+  return data;
+}
+
+/** Soft delete: mantém a transação no banco para histórico e futuras auditorias. */
+export async function softDeleteTransaction(id: string) {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .is("deleted_at", null)
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    throw appError(databaseErrorMessage(error, "Não foi possível excluir a transação."));
   }
 
   return data;
 }
 
-export async function deleteTransaction(id: string) {
-  const supabase = await createClient();
+/** Método reservado para recuperação futura de transações canceladas. */
+export async function restoreTransaction(id: string) {
+  const { supabase, user } = await getAuthenticatedUser();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Usuário não autenticado");
-  }
-
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("transactions")
-    .delete()
+    .update({ deleted_at: null })
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .not("deleted_at", "is", null)
+    .select("id")
+    .single();
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error || !data) throw appError("Não foi possível restaurar a transação.");
+
+  return data;
 }
 
 export async function getTransactionSummary() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Usuário não autenticado");
-  }
+  const { supabase, user } = await getAuthenticatedUser();
 
   const { data, error } = await supabase
     .from("transactions")
     .select("type, amount")
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .is("deleted_at", null);
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw appError(databaseErrorMessage(error, "Não foi possível calcular o resumo financeiro."));
 
   const totalIncome = data
     .filter((transaction) => transaction.type === "income")
-    .reduce((total, transaction) => {
-      return total + Number(transaction.amount);
-    }, 0);
+    .reduce((total, transaction) => total + Number(transaction.amount), 0);
 
   const totalExpense = data
     .filter((transaction) => transaction.type === "expense")
-    .reduce((total, transaction) => {
-      return total + Number(transaction.amount);
-    }, 0);
+    .reduce((total, transaction) => total + Number(transaction.amount), 0);
 
-  const balance = totalIncome - totalExpense;
-
-  return {
-    totalIncome,
-    totalExpense,
-    balance,
-  };
+  return { totalIncome, totalExpense, balance: totalIncome - totalExpense };
 }
 
 export async function getLatestTransactions(limit = 5) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Usuário não autenticado");
-  }
+  const { supabase, user } = await getAuthenticatedUser();
 
   const { data: transactions, error: transactionsError } = await supabase
     .from("transactions")
-    .select(`
-      id,
-      type,
-      amount,
-      description,
-      transaction_date,
-      category_id,
-      created_at
-    `)
+    .select("id, type, amount, description, transaction_date, category_id, created_at")
     .eq("user_id", user.id)
+    .is("deleted_at", null)
     .order("transaction_date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (transactionsError) {
-    throw new Error(transactionsError.message);
-  }
+  if (transactionsError) throw appError(databaseErrorMessage(transactionsError, "Não foi possível carregar as últimas transações."));
 
   const { data: categories, error: categoriesError } = await supabase
     .from("categories")
     .select("id, name")
     .eq("user_id", user.id);
 
-  if (categoriesError) {
-    throw new Error(categoriesError.message);
-  }
+  if (categoriesError) throw appError(databaseErrorMessage(categoriesError, "Não foi possível carregar as categorias."));
 
-  const categoryMap = new Map(
-    categories.map((category) => [category.id, category.name])
-  );
+  const categoryMap = new Map(categories.map((category) => [category.id, category.name]));
 
   return transactions.map((transaction) => ({
     ...transaction,
     categories: transaction.category_id
-      ? [
-          {
-            name: categoryMap.get(transaction.category_id) || "Sem categoria",
-          },
-        ]
+      ? [{ name: categoryMap.get(transaction.category_id) || "Sem categoria" }]
       : [],
   }));
 }
 
 export async function getExpensesByCategory() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Usuário não autenticado");
-  }
+  const { supabase, user } = await getAuthenticatedUser();
 
   const { data: transactions, error: transactionsError } = await supabase
     .from("transactions")
     .select("amount, category_id")
     .eq("user_id", user.id)
-    .eq("type", "expense");
+    .eq("type", "expense")
+    .is("deleted_at", null);
 
-  if (transactionsError) {
-    throw new Error(transactionsError.message);
-  }
+  if (transactionsError) throw appError(databaseErrorMessage(transactionsError, "Não foi possível carregar as despesas por categoria."));
 
   const { data: categories, error: categoriesError } = await supabase
     .from("categories")
     .select("id, name")
     .eq("user_id", user.id);
 
-  if (categoriesError) {
-    throw new Error(categoriesError.message);
+  if (categoriesError) throw appError(databaseErrorMessage(categoriesError, "Não foi possível carregar as categorias."));
+
+  const categoryMap = new Map(categories.map((category) => [category.id, category.name]));
+  const grouped: Record<string, number> = {};
+
+  for (const transaction of transactions) {
+    const categoryName = categoryMap.get(transaction.category_id) || "Sem categoria";
+    grouped[categoryName] = (grouped[categoryName] || 0) + Number(transaction.amount);
   }
-
-  const categoryMap = new Map(
-    categories.map((category) => [category.id, category.name])
-  );
-
-  const grouped = transactions.reduce(
-    (acc, transaction) => {
-      const categoryName =
-        categoryMap.get(transaction.category_id) || "Sem categoria";
-
-      const amount = Number(transaction.amount);
-
-      if (!acc[categoryName]) {
-        acc[categoryName] = 0;
-      }
-
-      acc[categoryName] += amount;
-
-      return acc;
-    },
-    {} as Record<string, number>
-  );
 
   return Object.entries(grouped)
-    .map(([category, amount]) => ({
-      category,
-      amount,
-    }))
+    .map(([category, amount]) => ({ category, amount }))
     .sort((a, b) => b.amount - a.amount);
 }
+
 export async function getMonthlyFinancialSummary() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Usuário não autenticado");
-  }
+  const { supabase, user } = await getAuthenticatedUser();
 
   const { data, error } = await supabase
     .from("transactions")
     .select("type, amount, transaction_date")
     .eq("user_id", user.id)
+    .is("deleted_at", null)
     .order("transaction_date", { ascending: true });
 
-  if (error) {
-    throw new Error(error.message);
+  if (error) throw appError(databaseErrorMessage(error, "Não foi possível carregar o resumo mensal."));
+
+  const grouped: Record<string, { month: string; income: number; expense: number }> = {};
+
+  for (const transaction of data) {
+    const month = transaction.transaction_date.slice(0, 7);
+    if (!grouped[month]) grouped[month] = { month, income: 0, expense: 0 };
+
+    if (transaction.type === "income") grouped[month].income += Number(transaction.amount);
+    else grouped[month].expense += Number(transaction.amount);
   }
-
-  const grouped = data.reduce(
-    (acc, transaction) => {
-      const month = transaction.transaction_date.slice(0, 7);
-      const amount = Number(transaction.amount);
-
-      if (!acc[month]) {
-        acc[month] = {
-          month,
-          income: 0,
-          expense: 0,
-        };
-      }
-
-      if (transaction.type === "income") {
-        acc[month].income += amount;
-      } else {
-        acc[month].expense += amount;
-      }
-
-      return acc;
-    },
-    {} as Record<
-      string,
-      {
-        month: string;
-        income: number;
-        expense: number;
-      }
-    >
-  );
 
   return Object.values(grouped);
 }

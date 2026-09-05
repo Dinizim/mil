@@ -3,6 +3,7 @@
 import { CircleDollarSign, LoaderCircle, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getClientErrorMessage } from "@/lib/errors";
 
 import { createGoalContributionAction } from "@/app/(dashboard)/goals/actions";
 
@@ -75,7 +76,7 @@ export default function AddContributionModal({ goal, isOpen, onClose }: Props) {
       router.refresh();
     } catch (error) {
       console.error("ERRO AO ADICIONAR CONTRIBUIÇÃO:", error);
-      setError(error instanceof Error ? error.message : "Não foi possível adicionar o dinheiro.");
+      setError(getClientErrorMessage(error, "Não foi possível adicionar dinheiro à meta."));
     } finally {
       setIsSaving(false);
     }

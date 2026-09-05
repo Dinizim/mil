@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { appError, databaseErrorMessage } from "@/lib/errors";
 
 export async function getDashboardSummary() {
   const supabase = await createClient();
@@ -18,10 +19,11 @@ export async function getDashboardSummary() {
   } = await supabase
     .from("transactions")
     .select("type, amount")
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .is("deleted_at", null);
 
   if (transactionsError) {
-    throw new Error(transactionsError.message);
+    throw appError(databaseErrorMessage(transactionsError, "Não foi possível carregar as transações."));
   }
 
   // BUSCAR METAS ATIVAS
@@ -35,7 +37,7 @@ export async function getDashboardSummary() {
     .eq("is_active", true);
 
   if (goalsError) {
-    throw new Error(goalsError.message);
+    throw appError(databaseErrorMessage(goalsError, "Não foi possível carregar as metas."));
   }
 
   const activeGoalIds = activeGoals.map(
@@ -56,7 +58,7 @@ export async function getDashboardSummary() {
       .in("goal_id", activeGoalIds);
 
     if (contributionsError) {
-      throw new Error(contributionsError.message);
+      throw appError(databaseErrorMessage(contributionsError, "Não foi possível carregar as contribuições."));
     }
 
     totalReserved = contributions.reduce(

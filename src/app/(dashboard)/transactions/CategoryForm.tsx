@@ -3,11 +3,18 @@
 import { LoaderCircle, Tags, X } from "lucide-react";
 import { useState } from "react";
 import { createCategoryAction } from "../categories/actions";
+import { getClientErrorMessage } from "@/lib/errors";
 
+
+type CreatedCategory = {
+  id: string;
+  name: string;
+  type: "income" | "expense";
+};
 
 type Props = {
   type: "income" | "expense";
-  onCategoryCreated: (categoryId: string) => void;
+  onCategoryCreated: (category: CreatedCategory) => void;
   onClose: () => void;
 };
 
@@ -38,15 +45,13 @@ export default function CategoryForm({
         type
       );
 
-      onCategoryCreated(category.id);
+      onCategoryCreated(category);
 
       setName("");
       onClose();
     } catch (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Erro ao criar categoria."
+        getClientErrorMessage(error, "Não foi possível criar a categoria.")
       );
     } finally {
       setLoading(false);

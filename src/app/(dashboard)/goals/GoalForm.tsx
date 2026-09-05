@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createGoalAction } from "./actions";
+import { getClientErrorMessage } from "@/lib/errors";
 
 export default function GoalForm() {
   const [name, setName] = useState("");
@@ -18,7 +19,7 @@ export default function GoalForm() {
     setErrorMessage("");
 
     if (!name || !targetAmount || !startDate) {
-      setErrorMessage("Preencha os campos obrigatÃƒ³rios.");
+      setErrorMessage("Preencha os campos obrigatórios.");
       return;
     }
 
@@ -39,9 +40,7 @@ export default function GoalForm() {
 
     } catch (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Erro ao criar meta."
+        getClientErrorMessage(error, "Não foi possível criar a meta.")
       );
     } finally {
       setLoading(false);
@@ -90,7 +89,7 @@ export default function GoalForm() {
 
       <div>
         <label className="mb-1 block text-sm font-medium">
-          Data de inÃƒ­cio
+          Data de início
         </label>
 
         <input

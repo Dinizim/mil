@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createGoalContributionAction } from "./actions";
+import { getClientErrorMessage } from "@/lib/errors";
 
 interface GoalContributionFormProps {
   goalId: string;
@@ -22,7 +23,7 @@ export default function GoalContributionForm({
     setErrorMessage("");
 
     if (!amount) {
-      setErrorMessage("Informe o valor da contribuiÃƒ§Ãƒ£o.");
+      setErrorMessage("Informe o valor da contribuição.");
       return;
     }
 
@@ -45,12 +46,10 @@ export default function GoalContributionForm({
       setAmount("");
       setDescription("");
 
-      setErrorMessage("Dinheiro adicionado Ãƒ  meta! Ã°Å¸Å¡â‚¬");
+      setErrorMessage("Dinheiro adicionado à meta!");
     } catch (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Erro ao adicionar dinheiro."
+        getClientErrorMessage(error, "Não foi possível adicionar dinheiro à meta.")
       );
     } finally {
       setLoading(false);

@@ -68,11 +68,11 @@ export default function DeleteTransactionButton({ id }: Props) {
             </div>
 
             {/* TÍTULO */}
-            <h2 className="mt-4 text-xl font-semibold tracking-tight text-white">Excluir transação?</h2>
+            <h2 className="mt-4 text-xl font-semibold tracking-tight text-white">Cancelar transação?</h2>
 
             {/* DESCRIÇÃO */}
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              Essa ação não poderá ser desfeita. A transação será removida permanentemente.
+              A transação será marcada como cancelada e deixará de aparecer no saldo e nos relatórios atuais. O registro será preservado para o histórico.
             </p>
 
             {/* AÇÕES */}
@@ -94,7 +94,7 @@ export default function DeleteTransactionButton({ id }: Props) {
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isDeleting && <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />}
-                {isDeleting ? "Excluindo..." : "Excluir"}
+                {isDeleting ? "Cancelando..." : "Cancelar transação"}
               </button>
             </div>
           </div>

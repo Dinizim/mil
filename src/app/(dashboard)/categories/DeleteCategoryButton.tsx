@@ -2,6 +2,7 @@
 
 import { AlertTriangle, LoaderCircle, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { getClientErrorMessage } from "@/lib/errors";
 
 import { deleteCategoryAction } from "./actions";
 
@@ -31,7 +32,7 @@ export default function DeleteCategoryButton({ id, name }: Props) {
       await deleteCategoryAction(id);
       setIsOpen(false);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Não foi possível excluir a categoria.");
+      setErrorMessage(getClientErrorMessage(error, "Não foi possível excluir a categoria."));
     } finally {
       setIsDeleting(false);
     }
@@ -43,7 +44,7 @@ export default function DeleteCategoryButton({ id, name }: Props) {
 
   return (
     <>
-      <button type="button" onClick={() => { setErrorMessage(""); setIsOpen(true); }} className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-rose-400/10 hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400" aria-label={`Excluir categoria ${name}`} title="Excluir categoria">
+      <button type="button" onClick={() => { setErrorMessage(""); setIsOpen(true); }} className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-rose-400/10 hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400" aria-label={`Arquivar categoria ${name}`} title="Arquivar categoria">
         <Trash2 className="size-4" aria-hidden="true" />
       </button>
 
@@ -54,14 +55,14 @@ export default function DeleteCategoryButton({ id, name }: Props) {
               <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-rose-400/10 text-rose-400"><AlertTriangle className="size-5" aria-hidden="true" /></div>
               <button type="button" onClick={closeModal} disabled={isDeleting} className="-mr-2 -mt-2 rounded-lg p-2 text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00] disabled:cursor-not-allowed disabled:opacity-50" aria-label="Fechar confirmação"><X className="size-5" aria-hidden="true" /></button>
             </div>
-            <h2 id="delete-category-title" className="mt-4 text-xl font-semibold tracking-tight text-white">Excluir categoria?</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-400">A categoria <span className="font-medium text-zinc-200">{name}</span> será removida permanentemente.</p>
+            <h2 id="delete-category-title" className="mt-4 text-xl font-semibold tracking-tight text-white">Arquivar categoria?</h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-400">A categoria <span className="font-medium text-zinc-200">{name}</span> será marcada como arquivada. As transações existentes continuarão preservando o histórico.</p>
             {errorMessage && <p role="alert" className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-300">{errorMessage}</p>}
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button type="button" onClick={closeModal} disabled={isDeleting} className="min-h-11 rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00] disabled:cursor-not-allowed disabled:opacity-50">Cancelar</button>
               <button type="button" onClick={handleDelete} disabled={isDeleting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-50">
                 {isDeleting && <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />}
-                {isDeleting ? "Excluindo..." : "Excluir categoria"}
+                {isDeleting ? "Arquivando..." : "Arquivar categoria"}
               </button>
             </div>
           </div>
