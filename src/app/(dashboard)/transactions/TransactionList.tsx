@@ -4,7 +4,6 @@ import { ArrowDownLeft, ArrowUpRight, Calendar, Filter, Search } from "lucide-re
 import { useState } from "react";
 
 import DeleteTransactionButton from "./DeleteTransactionButton";
-import EditTransactionButton from "./EditTransactionButton";
 
 type Transaction = { id: string; type: "income" | "expense"; amount: number | string; description: string | null; transaction_date: string; categories: { name: string } | null };
 type Category = { id: string; name: string; type: "income" | "expense" };
@@ -140,7 +139,7 @@ export default function TransactionList({ transactions, categories }: Props) {
                     <div className={"flex size-11 shrink-0 items-center justify-center rounded-xl " + (isIncome ? "bg-emerald-400/10 text-emerald-400" : "bg-rose-400/10 text-rose-400")}>{isIncome ? <ArrowDownLeft className="size-5" aria-hidden="true" /> : <ArrowUpRight className="size-5" aria-hidden="true" />}</div>
                     <div className="min-w-0"><h3 className="truncate text-sm font-semibold text-zinc-100 sm:text-base">{transaction.description || "Sem descrição"}</h3><div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500"><span className="rounded-md bg-zinc-800 px-2 py-1 text-zinc-300">{transaction.categories?.name || "Sem categoria"}</span><span>{formatDate(transaction.transaction_date)}</span></div></div>
                   </div>
-                  <div className="flex items-center justify-between gap-3 sm:justify-end"><p className={"text-base font-semibold " + (isIncome ? "text-emerald-400" : "text-rose-400")}>{isIncome ? "+" : "-"} {formatCurrency(transaction.amount)}</p><div className="flex items-center gap-1"><EditTransactionButton transaction={transaction} categories={categories} /><DeleteTransactionButton id={transaction.id} /></div></div>
+                  <div className="flex items-center justify-between gap-3 sm:justify-end"><p className={"text-base font-semibold " + (isIncome ? "text-emerald-400" : "text-rose-400")}>{isIncome ? "+" : "-"} {formatCurrency(transaction.amount)}</p><div className="flex items-center gap-1"><DeleteTransactionButton id={transaction.id} /></div></div>
                 </div>
               </article>;
             })}

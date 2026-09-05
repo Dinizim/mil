@@ -13,16 +13,17 @@ type CreatedCategory = {
 };
 
 type Props = {
-  type: "income" | "expense";
+  defaultType: "income" | "expense";
   onCategoryCreated: (category: CreatedCategory) => void;
   onClose: () => void;
 };
 
 export default function CategoryForm({
-  type,
+  defaultType,
   onCategoryCreated,
   onClose,
 }: Props) {
+  const [type, setType] = useState<"income" | "expense">(defaultType);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -108,9 +109,16 @@ export default function CategoryForm({
               Tipo
             </label>
 
-            <div className="rounded-xl border border-zinc-700 bg-[#111113] p-3 text-sm text-zinc-300">
-              {type === "expense" ? "Saída" : "Entrada"}
-            </div>
+            <select
+              value={type}
+              onChange={(event) =>
+                setType(event.target.value as "income" | "expense")
+              }
+              className="min-h-11 w-full rounded-xl border border-zinc-700 bg-[#111113] px-3 text-sm text-zinc-100 outline-none focus:border-[#FF7A00] focus:ring-2 focus:ring-[#FF7A00]/20"
+            >
+              <option value="expense">Saída</option>
+              <option value="income">Entrada</option>
+            </select>
           </div>
 
           <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">

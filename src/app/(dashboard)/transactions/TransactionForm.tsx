@@ -260,9 +260,10 @@ export default function TransactionForm({ categories }: Props) {
       )}
       {categoryModalOpen && (
         <CategoryForm
-          type={type}
+          defaultType={type}
           onCategoryCreated={(category) => {
             setAvailableCategories((current) => [...current, category]);
+            setType(category.type);
             setCategoryId(category.id);
             setCategoryModalOpen(false);
           }}

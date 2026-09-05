@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createTransaction, updateTransaction, softDeleteTransaction } from "@/services/transaction.service";
+import { createTransaction, softDeleteTransaction } from "@/services/transaction.service";
 
 function validateTransactionInput(type: unknown, amount: unknown, description: unknown, categoryId: unknown, transactionDate: unknown) {
   if (type !== "income" && type !== "expense") throw new Error("Tipo de transação inválido.");
@@ -15,15 +15,6 @@ function validateTransactionInput(type: unknown, amount: unknown, description: u
 export async function createTransactionAction(type: "income" | "expense", amount: number, description: string, categoryId: string, transactionDate: string) {
   validateTransactionInput(type, amount, description, categoryId, transactionDate);
   const transaction = await createTransaction(type, amount, description, categoryId, transactionDate);
-  revalidatePath("/transactions");
-  revalidatePath("/dashboard");
-  return transaction;
-}
-
-export async function updateTransactionAction(id: string, type: "income" | "expense", amount: number, description: string, categoryId: string, transactionDate: string) {
-  if (typeof id !== "string" || !id) throw new Error("Transação inválida.");
-  validateTransactionInput(type, amount, description, categoryId, transactionDate);
-  const transaction = await updateTransaction(id, type, amount, description, categoryId, transactionDate);
   revalidatePath("/transactions");
   revalidatePath("/dashboard");
   return transaction;

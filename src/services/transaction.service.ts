@@ -139,44 +139,6 @@ export async function createTransaction(
   return data;
 }
 
-export async function updateTransaction(
-  id: string,
-  type: "income" | "expense",
-  amount: number,
-  description: string,
-  categoryId: string,
-  transactionDate: string
-) {
-  const { supabase, user } = await getAuthenticatedUser();
-
-  if (type !== "income" && type !== "expense") throw appError("Tipo de transação inválido.");
-  validateAmount(amount);
-  validateDate(transactionDate);
-  validateDescription(description);
-  if (!categoryId) throw appError("Selecione uma categoria.");
-
-  await validateCategoryForTransaction(supabase, user.id, categoryId, type);
-
-  const { data, error } = await supabase
-    .from("transactions")
-    .update({
-      type,
-      amount,
-      description: description.trim() || null,
-      category_id: categoryId,
-      transaction_date: transactionDate,
-    })
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .is("deleted_at", null)
-    .select()
-    .single();
-
-  if (error) throw appError(databaseErrorMessage(error, "Não foi possível atualizar a transação."));
-
-  return data;
-}
-
 /** Soft delete: mantém a transação no banco para histórico e futuras auditorias. */
 export async function softDeleteTransaction(id: string) {
   const { supabase, user } = await getAuthenticatedUser();
@@ -268,14 +230,42 @@ export async function getLatestTransactions(limit = 5) {
   }));
 }
 
+function getCurrentMonthRange() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+
+  if (!year || !month) {
+    throw appError("Não foi possível identificar o mês atual.");
+  }
+
+  const start = `${year}-${month}-01`;
+  const nextMonth = new Date(Number(year), Number(month), 1);
+  const nextYear = nextMonth.getFullYear();
+  const nextMonthNumber = String(nextMonth.getMonth() + 1).padStart(2, "0");
+
+  return {
+    start,
+    end: `${nextYear}-${nextMonthNumber}-01`,
+  };
+}
+
 export async function getExpensesByCategory() {
   const { supabase, user } = await getAuthenticatedUser();
+  const { start, end } = getCurrentMonthRange();
 
   const { data: transactions, error: transactionsError } = await supabase
     .from("transactions")
     .select("amount, category_id")
     .eq("user_id", user.id)
     .eq("type", "expense")
+    .gte("transaction_date", start)
+    .lt("transaction_date", end)
     .is("deleted_at", null);
 
   if (transactionsError) throw appError(databaseErrorMessage(transactionsError, "Não foi possível carregar as despesas por categoria."));
