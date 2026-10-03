@@ -13,7 +13,8 @@ export default function Error({
   reset,
 }: Props) {
   useEffect(() => {
-    console.error(error);
+    // Só o identificador: a mensagem pode conter dados financeiros do usuário.
+    console.error("Erro na página", error.digest ?? "");
   }, [error]);
 
   return (

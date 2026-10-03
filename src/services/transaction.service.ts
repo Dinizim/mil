@@ -1,68 +1,75 @@
-import { createClient } from "@/lib/supabase/server";
+import "server-only";
+
+import { getAuthenticatedUser, type Supabase } from "@/lib/auth";
+import { isValidDate, monthRange } from "@/lib/dates";
 import { appError, databaseErrorMessage } from "@/lib/errors";
+import { importKey } from "@/lib/import-statement";
+import { parseInput, transactionInputSchema, type TransactionInput } from "@/lib/validation";
 
-async function getAuthenticatedUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+import { categoryName } from "./finance.service";
 
-  if (!user) throw appError("Usuário não autenticado.");
+const TRANSACTION_FIELDS = `
+  id,
+  type,
+  amount,
+  description,
+  transaction_date,
+  category_id,
+  created_at,
+  categories!transactions_category_owner_fk ( name )
+`;
 
-  return { supabase, user };
+type TransactionRow = {
+  id: string;
+  type: "income" | "expense";
+  amount: number;
+  description: string | null;
+  transaction_date: string;
+  category_id: string | null;
+  created_at: string;
+  categories: { name: string } | { name: string }[] | null;
+};
+
+export type Transaction = Omit<TransactionRow, "categories"> & { categoryName: string };
+
+function normalize(rows: TransactionRow[]): Transaction[] {
+  return rows.map(({ categories, ...transaction }) => ({
+    ...transaction,
+    amount: Number(transaction.amount),
+    categoryName: transaction.category_id ? categoryName(categories) : "Sem categoria",
+  }));
 }
 
-export async function getTransactions() {
+/** Lista transações ativas; com `month` (YYYY-MM) filtra pelo mês. */
+export async function getTransactions(options: { month?: string | null; limit?: number } = {}) {
   const { supabase, user } = await getAuthenticatedUser();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("transactions")
-    .select(`
-      id,
-      type,
-      amount,
-      description,
-      transaction_date,
-      category_id,
-      categories!transactions_category_owner_fk (
-        name
-      )
-    `)
+    .select(TRANSACTION_FIELDS)
     .eq("user_id", user.id)
     .is("deleted_at", null)
     .order("transaction_date", { ascending: false })
     .order("created_at", { ascending: false });
 
+  if (options.month) {
+    const { start, end } = monthRange(options.month);
+    query = query.gte("transaction_date", start).lt("transaction_date", end);
+  }
+  if (options.limit) query = query.limit(options.limit);
+
+  const { data, error } = await query;
   if (error) throw appError(databaseErrorMessage(error, "Não foi possível carregar as transações."));
 
-  return data;
+  return normalize(data as TransactionRow[]);
 }
 
-export async function getTransactionById(id: string) {
-  const { supabase, user } = await getAuthenticatedUser();
-
-  const { data, error } = await supabase
-    .from("transactions")
-    .select(`
-      id,
-      type,
-      amount,
-      description,
-      transaction_date,
-      category_id
-    `)
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .is("deleted_at", null)
-    .single();
-
-  if (error) throw appError(databaseErrorMessage(error, "Transação não encontrada."));
-
-  return data;
+export async function getLatestTransactions(limit = 5, month?: string) {
+  return getTransactions({ limit, month });
 }
 
 async function validateCategoryForTransaction(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Supabase,
   userId: string,
   categoryId: string,
   type: "income" | "expense"
@@ -79,64 +86,58 @@ async function validateCategoryForTransaction(
   if (category.type !== type) throw appError("A categoria não pertence ao tipo da transação.");
 }
 
-function validateAmount(amount: number) {
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw appError("Informe um valor maior que zero.");
-  }
-
-  if (Math.round(amount * 100) !== amount * 100) {
-    throw appError("O valor deve ter no máximo 2 casas decimais.");
-  }
-}
-
-function validateDate(transactionDate: string) {
-  if (
-    !/^\d{4}-\d{2}-\d{2}$/.test(transactionDate) ||
-    Number.isNaN(Date.parse(`${transactionDate}T00:00:00`))
-  ) {
-    throw appError("Informe uma data válida.");
-  }
-}
-
-function validateDescription(description: string) {
-  if (description.length > 200) {
-    throw appError("A descrição deve ter no máximo 200 caracteres.");
-  }
-}
-
-export async function createTransaction(
-  type: "income" | "expense",
-  amount: number,
-  description: string,
-  categoryId: string,
-  transactionDate: string
-) {
+export async function createTransaction(input: TransactionInput) {
   const { supabase, user } = await getAuthenticatedUser();
+  const transaction = parseInput(transactionInputSchema, input);
 
-  if (type !== "income" && type !== "expense") throw appError("Tipo de transação inválido.");
-  validateAmount(amount);
-  validateDate(transactionDate);
-  validateDescription(description);
-  if (!categoryId) throw appError("Selecione uma categoria.");
-
-  await validateCategoryForTransaction(supabase, user.id, categoryId, type);
+  await validateCategoryForTransaction(supabase, user.id, transaction.categoryId, transaction.type);
 
   const { data, error } = await supabase
     .from("transactions")
     .insert({
       user_id: user.id,
-      type,
-      amount,
-      description: description.trim() || null,
-      category_id: categoryId,
-      transaction_date: transactionDate,
+      type: transaction.type,
+      amount: transaction.amount,
+      description: transaction.description || null,
+      category_id: transaction.categoryId,
+      transaction_date: transaction.transactionDate,
     })
-    .select()
+    .select("id")
     .single();
 
   if (error) throw appError(databaseErrorMessage(error, "Não foi possível criar a transação."));
-
   return data;
+}
+
+/**
+ * Editar transação. O banco trata transações como imutáveis (trigger), então a
+ * edição cria o lançamento corrigido e cancela o original, preservando o histórico.
+ * TODO(banco): fazer as duas operações numa RPC com transação.
+ */
+export async function replaceTransaction(id: string, input: TransactionInput) {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  const { data: original, error: originalError } = await supabase
+    .from("transactions")
+    .select("id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .is("deleted_at", null)
+    .single();
+
+  if (originalError || !original) throw appError("Transação não encontrada.");
+
+  const created = await createTransaction(input);
+
+  try {
+    await softDeleteTransaction(id);
+  } catch (error) {
+    // Desfaz a nova transação para não duplicar o lançamento.
+    await softDeleteTransaction(created.id).catch(() => undefined);
+    throw error;
+  }
+
+  return created;
 }
 
 /** Soft delete: mantém a transação no banco para histórico e futuras auditorias. */
@@ -177,140 +178,68 @@ export async function restoreTransaction(id: string) {
   return data;
 }
 
-export async function getTransactionSummary() {
+/** Chaves (data|valor|descrição) das transações existentes no intervalo, para detectar duplicadas. */
+export async function getExistingImportKeys(startDate: string, endDate: string) {
+  if (!isValidDate(startDate) || !isValidDate(endDate)) return [];
   const { supabase, user } = await getAuthenticatedUser();
 
   const { data, error } = await supabase
     .from("transactions")
-    .select("type, amount")
-    .eq("user_id", user.id)
-    .is("deleted_at", null);
-
-  if (error) throw appError(databaseErrorMessage(error, "Não foi possível calcular o resumo financeiro."));
-
-  const totalIncome = data
-    .filter((transaction) => transaction.type === "income")
-    .reduce((total, transaction) => total + Number(transaction.amount), 0);
-
-  const totalExpense = data
-    .filter((transaction) => transaction.type === "expense")
-    .reduce((total, transaction) => total + Number(transaction.amount), 0);
-
-  return { totalIncome, totalExpense, balance: totalIncome - totalExpense };
-}
-
-export async function getLatestTransactions(limit = 5) {
-  const { supabase, user } = await getAuthenticatedUser();
-
-  const { data: transactions, error: transactionsError } = await supabase
-    .from("transactions")
-    .select("id, type, amount, description, transaction_date, category_id, created_at")
+    .select("type, amount, description, transaction_date")
     .eq("user_id", user.id)
     .is("deleted_at", null)
-    .order("transaction_date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(limit);
+    .gte("transaction_date", startDate)
+    .lte("transaction_date", endDate);
 
-  if (transactionsError) throw appError(databaseErrorMessage(transactionsError, "Não foi possível carregar as últimas transações."));
+  if (error) throw appError(databaseErrorMessage(error, "Não foi possível verificar transações duplicadas."));
+
+  return data.map((row) =>
+    importKey({ date: row.transaction_date, amount: Number(row.amount) * (row.type === "income" ? 1 : -1), description: row.description ?? "" })
+  );
+}
+
+const MAX_IMPORT_ROWS = 500;
+
+/** Importa várias transações de uma vez (extrato OFX/CSV), validando cada linha. */
+export async function importTransactions(rows: TransactionInput[]) {
+  if (rows.length === 0) throw appError("Selecione ao menos uma transação para importar.");
+  if (rows.length > MAX_IMPORT_ROWS) throw appError(`Importe no máximo ${MAX_IMPORT_ROWS} transações por vez.`);
+
+  const { supabase, user } = await getAuthenticatedUser();
+  const parsed = rows.map((row, index) => {
+    try {
+      return parseInput(transactionInputSchema, row);
+    } catch (error) {
+      throw appError(`Linha ${index + 1}: ${error instanceof Error ? error.message : "dados inválidos."}`);
+    }
+  });
 
   const { data: categories, error: categoriesError } = await supabase
     .from("categories")
-    .select("id, name")
-    .eq("user_id", user.id);
-
-  if (categoriesError) throw appError(databaseErrorMessage(categoriesError, "Não foi possível carregar as categorias."));
-
-  const categoryMap = new Map(categories.map((category) => [category.id, category.name]));
-
-  return transactions.map((transaction) => ({
-    ...transaction,
-    categories: transaction.category_id
-      ? [{ name: categoryMap.get(transaction.category_id) || "Sem categoria" }]
-      : [],
-  }));
-}
-
-function getCurrentMonthRange() {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-  }).formatToParts(new Date());
-
-  const year = parts.find((part) => part.type === "year")?.value;
-  const month = parts.find((part) => part.type === "month")?.value;
-
-  if (!year || !month) {
-    throw appError("Não foi possível identificar o mês atual.");
-  }
-
-  const start = `${year}-${month}-01`;
-  const nextMonth = new Date(Number(year), Number(month), 1);
-  const nextYear = nextMonth.getFullYear();
-  const nextMonthNumber = String(nextMonth.getMonth() + 1).padStart(2, "0");
-
-  return {
-    start,
-    end: `${nextYear}-${nextMonthNumber}-01`,
-  };
-}
-
-export async function getExpensesByCategory() {
-  const { supabase, user } = await getAuthenticatedUser();
-  const { start, end } = getCurrentMonthRange();
-
-  const { data: transactions, error: transactionsError } = await supabase
-    .from("transactions")
-    .select("amount, category_id")
+    .select("id, type")
     .eq("user_id", user.id)
-    .eq("type", "expense")
-    .gte("transaction_date", start)
-    .lt("transaction_date", end)
     .is("deleted_at", null);
 
-  if (transactionsError) throw appError(databaseErrorMessage(transactionsError, "Não foi possível carregar as despesas por categoria."));
-
-  const { data: categories, error: categoriesError } = await supabase
-    .from("categories")
-    .select("id, name")
-    .eq("user_id", user.id);
-
   if (categoriesError) throw appError(databaseErrorMessage(categoriesError, "Não foi possível carregar as categorias."));
+  const categoryTypes = new Map(categories.map((category) => [category.id, category.type]));
 
-  const categoryMap = new Map(categories.map((category) => [category.id, category.name]));
-  const grouped: Record<string, number> = {};
+  parsed.forEach((row, index) => {
+    const type = categoryTypes.get(row.categoryId);
+    if (!type) throw appError(`Linha ${index + 1}: a categoria selecionada não está disponível.`);
+    if (type !== row.type) throw appError(`Linha ${index + 1}: a categoria não pertence ao tipo da transação.`);
+  });
 
-  for (const transaction of transactions) {
-    const categoryName = categoryMap.get(transaction.category_id) || "Sem categoria";
-    grouped[categoryName] = (grouped[categoryName] || 0) + Number(transaction.amount);
-  }
+  const { error } = await supabase.from("transactions").insert(
+    parsed.map((row) => ({
+      user_id: user.id,
+      type: row.type,
+      amount: row.amount,
+      description: row.description || null,
+      category_id: row.categoryId,
+      transaction_date: row.transactionDate,
+    }))
+  );
 
-  return Object.entries(grouped)
-    .map(([category, amount]) => ({ category, amount }))
-    .sort((a, b) => b.amount - a.amount);
-}
-
-export async function getMonthlyFinancialSummary() {
-  const { supabase, user } = await getAuthenticatedUser();
-
-  const { data, error } = await supabase
-    .from("transactions")
-    .select("type, amount, transaction_date")
-    .eq("user_id", user.id)
-    .is("deleted_at", null)
-    .order("transaction_date", { ascending: true });
-
-  if (error) throw appError(databaseErrorMessage(error, "Não foi possível carregar o resumo mensal."));
-
-  const grouped: Record<string, { month: string; income: number; expense: number }> = {};
-
-  for (const transaction of data) {
-    const month = transaction.transaction_date.slice(0, 7);
-    if (!grouped[month]) grouped[month] = { month, income: 0, expense: 0 };
-
-    if (transaction.type === "income") grouped[month].income += Number(transaction.amount);
-    else grouped[month].expense += Number(transaction.amount);
-  }
-
-  return Object.values(grouped);
+  if (error) throw appError(databaseErrorMessage(error, "Não foi possível importar as transações."));
+  return { imported: parsed.length };
 }

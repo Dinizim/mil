@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Geist } from "next/font/google";
 import PWARegister from "@/components/PWARegister";
+import { privacyInitScript } from "@/components/PrivacyToggle";
 
 const geist = Geist({
   subsets: ["latin"],
@@ -40,7 +41,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className={geist.variable}>
+    // data-privacy é aplicado pelo script antes da hidratação.
+    <html lang="pt-BR" className={geist.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: privacyInitScript }} />
+      </head>
       <body><PWARegister />{children}</body>
     </html>
   );

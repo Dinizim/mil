@@ -12,6 +12,21 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait-primary",
     lang: "pt-BR",
     categories: ["finance", "productivity"],
+    // Atalhos ao pressionar o ícone do app instalado.
+    shortcuts: [
+      {
+        name: "Lançamento rápido",
+        short_name: "Lançar",
+        description: "Registrar um gasto escrevendo, por exemplo, mercado 85",
+        url: "/quick",
+        icons: [{ src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+      },
+      {
+        name: "Transações",
+        url: "/transactions",
+        icons: [{ src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+      },
+    ],
     icons: [
       {
         src: "/icons/icon-192.png",

@@ -1,276 +1,188 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, X } from "lucide-react";
-import { createTransactionAction } from "./actions";
-import CategoryForm from "./CategoryForm";
-import { getClientErrorMessage } from "@/lib/errors";
-type Category = {
-  id: string;
-  name: string;
+import { Plus } from "lucide-react";
+import { useId, useState } from "react";
+
+import CategoryCreateModal, { type Category } from "@/components/CategoryCreateModal";
+import { Alert, Field, Modal, SubmitLabel, inputClass, primaryButtonClass, secondaryButtonClass } from "@/components/ui/form";
+import { todayISO } from "@/lib/dates";
+import { parseMoney } from "@/lib/money";
+
+import { createTransactionAction, updateTransactionAction } from "./actions";
+
+export type TransactionDraft = {
   type: "income" | "expense";
+  amount: string;
+  description: string;
+  categoryId: string;
+  transactionDate: string;
 };
 
 type Props = {
+  open: boolean;
+  onClose: () => void;
   categories: Category[];
+  /** Quando informado, o formulário edita essa transação. */
+  editingId?: string;
+  initial?: Partial<TransactionDraft>;
 };
 
-export default function TransactionForm({ categories }: Props) {
-  const [open, setOpen] = useState(false);
-  const [availableCategories, setAvailableCategories] = useState(categories);
+/** Formata número para o campo de valor no padrão brasileiro ("19,99"). */
+export function amountToInput(value: number): string {
+  return value.toFixed(2).replace(".", ",");
+}
 
-  const [type, setType] = useState<"income" | "expense">("expense");
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
-  const [categoryId, setCategoryId] = useState("");
+export function TransactionFormModal(props: Props) {
+  // Montado só quando aberto: cada abertura começa com o estado limpo.
+  return props.open ? <TransactionFormDialog {...props} /> : null;
+}
+
+function TransactionFormDialog({ onClose, categories, editingId, initial }: Props) {
+  const [createdCategories, setCreatedCategories] = useState<Category[]>([]);
+  const [draft, setDraft] = useState<TransactionDraft>(() => emptyDraft(initial));
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
-  const [transactionDate, setTransactionDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
-
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const ids = { type: useId(), amount: useId(), description: useId(), category: useId(), date: useId() };
 
-  const filteredCategories = availableCategories.filter(
-    (category) => category.type === type
-  );
+  const filteredCategories = [...categories, ...createdCategories].filter((category) => category.type === draft.type);
+  const update = (patch: Partial<TransactionDraft>) => setDraft((current) => ({ ...current, ...patch }));
 
-  function closeModal() {
-    setOpen(false);
-  }
-
-  async function handleSubmit(
-    event: React.FormEvent<HTMLFormElement>
-  ) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage("");
 
-    if (!amount || Number(amount) <= 0) {
-      setErrorMessage("Informe um valor válido.");
+    const amount = parseMoney(draft.amount);
+    if (amount === null || amount <= 0) {
+      setErrorMessage("Informe um valor válido, como 19,99.");
       return;
     }
-
-    if (!categoryId) {
+    if (!draft.categoryId) {
       setErrorMessage("Selecione uma categoria.");
       return;
     }
 
     setLoading(true);
+    const result = editingId
+      ? await updateTransactionAction(editingId, draft)
+      : await createTransactionAction(draft);
+    setLoading(false);
 
-    try {
-      await createTransactionAction(
-        type,
-        Number(amount),
-        description,
-        categoryId,
-        transactionDate
-      );
-
-      setAmount("");
-      setDescription("");
-      setCategoryId("");
-
-      closeModal();
-      setErrorMessage("");
-    } catch (error) {
-      setErrorMessage(
-        getClientErrorMessage(error, "Não foi possível criar a transação.")
-      );
-    } finally {
-      setLoading(false);
+    if (!result.ok) {
+      setErrorMessage(result.error);
+      return;
     }
+    onClose();
   }
 
   return (
     <>
-      {/* Botão para abrir o modal */}
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#FF7A00] px-4 py-3 text-sm font-semibold text-[#17110A] transition hover:bg-[#FF8A1A]"
+      <Modal
+        open
+        onClose={onClose}
+        busy={loading}
+        size="lg"
+        title={editingId ? "Editar transação" : "Nova transação"}
+        description={
+          editingId
+            ? "O lançamento original será cancelado e substituído por este, preservando o histórico."
+            : "Registre uma entrada ou saída."
+        }
       >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Alert>{errorMessage}</Alert>
+
+          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tipo">
+            {(["expense", "income"] as const).map((type) => (
+              <button
+                key={type}
+                type="button"
+                role="radio"
+                aria-checked={draft.type === type}
+                onClick={() => update({ type, categoryId: "" })}
+                className={
+                  "min-h-11 rounded-xl text-sm font-semibold transition " +
+                  (draft.type === type
+                    ? type === "expense"
+                      ? "bg-rose-500/15 text-rose-300 ring-1 ring-rose-400/40"
+                      : "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/40"
+                    : "border border-zinc-700 text-zinc-400 hover:bg-zinc-800")
+                }
+              >
+                {type === "expense" ? "Saída" : "Entrada"}
+              </button>
+            ))}
+          </div>
+
+          <Field label="Valor" htmlFor={ids.amount}>
+            <input id={ids.amount} type="text" inputMode="decimal" value={draft.amount} onChange={(event) => update({ amount: event.target.value })} placeholder="0,00" autoFocus className={inputClass} />
+          </Field>
+
+          <Field label="Descrição" hint="(opcional)" htmlFor={ids.description}>
+            <input id={ids.description} type="text" value={draft.description} maxLength={200} onChange={(event) => update({ description: event.target.value })} placeholder="Ex.: Mercado" className={inputClass} />
+          </Field>
+
+          <Field label="Categoria" htmlFor={ids.category}>
+            <div className="flex gap-2">
+              <select id={ids.category} value={draft.categoryId} onChange={(event) => update({ categoryId: event.target.value })} className={inputClass}>
+                <option value="">Selecione uma categoria</option>
+                {filteredCategories.map((category) => (
+                  <option key={category.id} value={category.id}>{category.name}</option>
+                ))}
+              </select>
+              <button type="button" onClick={() => setCategoryModalOpen(true)} className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl border border-zinc-700 text-zinc-200 transition hover:bg-zinc-800" title="Criar categoria" aria-label="Criar categoria">
+                <Plus className="size-5" aria-hidden="true" />
+              </button>
+            </div>
+          </Field>
+
+          <Field label="Data" htmlFor={ids.date}>
+            <input id={ids.date} type="date" value={draft.transactionDate} onChange={(event) => update({ transactionDate: event.target.value })} className={inputClass} />
+          </Field>
+
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+            <button type="button" onClick={onClose} disabled={loading} className={secondaryButtonClass}>Cancelar</button>
+            <button type="submit" disabled={loading} className={primaryButtonClass}>
+              <SubmitLabel loading={loading} idle={editingId ? "Salvar alterações" : "Adicionar transação"} busy="Salvando..." />
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <CategoryCreateModal
+        open={categoryModalOpen}
+        defaultType={draft.type}
+        onClose={() => setCategoryModalOpen(false)}
+        onCreated={(category) => {
+          setCreatedCategories((current) => [...current, category]);
+          update({ type: category.type, categoryId: category.id });
+        }}
+      />
+    </>
+  );
+}
+
+function emptyDraft(initial?: Partial<TransactionDraft>): TransactionDraft {
+  return {
+    type: "expense",
+    amount: "",
+    description: "",
+    categoryId: "",
+    transactionDate: todayISO(),
+    ...initial,
+  };
+}
+
+export default function TransactionForm({ categories }: { categories: Category[] }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className={primaryButtonClass}>
         <Plus className="size-4" aria-hidden="true" />
         Nova transação
       </button>
-
-      {/* Modal */}
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-          <div role="dialog" aria-modal="true" className="max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-800 bg-[#18181B] p-5 text-zinc-100 shadow-2xl sm:p-6">
-            {/* Cabeçalho */}
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold">Nova transação</h2>
-
-                <p className="mt-1 text-sm text-zinc-400">Registre uma entrada ou saída.</p>
-              </div>
-
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-lg p-2 text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-100"
-              >
-                <X className="size-5" aria-hidden="true" />
-              </button>
-            </div>
-
-            {/* Formulário */}
-            <form
-              onSubmit={handleSubmit}
-              className="mt-6 space-y-4"
-            >
-      {errorMessage && (<div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-300">{errorMessage}</div>)}
-              {/* Tipo */}
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Tipo
-                </label>
-
-                <select
-                  value={type}
-                  onChange={(event) => {
-                    const newType = event.target.value as
-                      | "income"
-                      | "expense";
-
-                    setType(newType);
-
-                    // Evita manter uma categoria incompatível
-                    setCategoryId("");
-                  }}
-                  className="w-full rounded-xl border border-zinc-700 bg-[#111113] p-3 text-zinc-100 outline-none focus:border-[#FF7A00] focus:ring-2 focus:ring-[#FF7A00]/20"
-                >
-                  <option value="expense">Saída</option>
-                  <option value="income">Entrada</option>
-                </select>
-              </div>
-
-              {/* Valor */}
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Valor
-                </label>
-
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={amount}
-                  onChange={(event) =>
-                    setAmount(event.target.value)
-                  }
-                  placeholder="0,00"
-                  className="w-full rounded-xl border border-zinc-700 bg-[#111113] p-3 text-zinc-100 outline-none focus:border-[#FF7A00] focus:ring-2 focus:ring-[#FF7A00]/20"
-                />
-              </div>
-
-              {/* Descrição */}
-              <div>
-                <label className="mb-1 block text-sm font-medium">Descrição</label>
-
-                <input
-                  type="text"
-                  value={description}
-                  onChange={(event) =>
-                    setDescription(event.target.value)
-                  }
-                  placeholder="Ex: Mercado"
-                  className="w-full rounded-xl border border-zinc-700 bg-[#111113] p-3 text-zinc-100 outline-none focus:border-[#FF7A00] focus:ring-2 focus:ring-[#FF7A00]/20"
-                />
-              </div>
-
-              {/* Categoria */}
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Categoria
-                </label>
-
-                <div className="flex gap-2">
-                  <select
-                    value={categoryId}
-                    onChange={(event) =>
-                      setCategoryId(event.target.value)
-                    }
-                    className="w-full rounded-xl border border-zinc-700 bg-[#111113] p-3 text-zinc-100 outline-none focus:border-[#FF7A00] focus:ring-2 focus:ring-[#FF7A00]/20"
-                  >
-                    <option value="">
-                      Selecione uma categoria
-                    </option>
-
-                    {filteredCategories.map((category) => (
-                      <option
-                        key={category.id}
-                        value={category.id}
-                      >
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={() => setCategoryModalOpen(true)}
-                    className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl border border-zinc-700 text-zinc-200 transition hover:bg-zinc-800"
-                    title="Criar categoria"
-                    aria-label="Criar categoria"
-                  >
-                    <Plus className="size-5" aria-hidden="true" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Data */}
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Data
-                </label>
-
-                <input
-                  type="date"
-                  value={transactionDate}
-                  onChange={(event) =>
-                    setTransactionDate(event.target.value)
-                  }
-                  className="w-full rounded-xl border border-zinc-700 bg-[#111113] p-3 text-zinc-100 outline-none focus:border-[#FF7A00] focus:ring-2 focus:ring-[#FF7A00]/20"
-                />
-              </div>
-
-              {/* Botões */}
-              <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  disabled={loading}
-                  className="rounded-xl border border-zinc-700 px-5 py-3 font-medium text-zinc-300 transition hover:bg-zinc-800 disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="rounded-xl bg-[#FF7A00] px-5 py-3 font-semibold text-[#17110A] transition hover:bg-[#FF8A1A] disabled:opacity-50"
-                >
-                  {loading ? "Salvando..." : "Adicionar transação"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-      {categoryModalOpen && (
-        <CategoryForm
-          defaultType={type}
-          onCategoryCreated={(category) => {
-            setAvailableCategories((current) => [...current, category]);
-            setType(category.type);
-            setCategoryId(category.id);
-            setCategoryModalOpen(false);
-          }}
-          onClose={() => setCategoryModalOpen(false)}
-        />
-      )}
-      
+      <TransactionFormModal open={open} onClose={() => setOpen(false)} categories={categories} />
     </>
   );
 }

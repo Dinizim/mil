@@ -141,3 +141,44 @@ body {
     @apply font-sans;
   }
 }
+
+/* Modo privacidade: valores marcados com .sensitive ficam borrados. */
+html[data-privacy="on"] .sensitive {
+  filter: blur(8px);
+  user-select: none;
+}
+
+/* Impressão de relatórios (exportar PDF pelo navegador). */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  html,
+  body,
+  main {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-area * {
+    color: #000 !important;
+    background: transparent !important;
+    border-color: #ccc !important;
+    box-shadow: none !important;
+  }
+
+  .print-area main,
+  main.print-area {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  html[data-privacy="on"] .sensitive {
+    filter: none;
+  }
+}

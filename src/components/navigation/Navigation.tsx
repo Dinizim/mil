@@ -1,23 +1,37 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeftRight, LayoutDashboard, Tags, UserRound, type LucideIcon } from "lucide-react";
+import {
+  ArrowLeftRight,
+  BarChart3,
+  LayoutDashboard,
+  Shield,
+  Tags,
+  Target,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import LogoutButton from "@/components/LogoutButton";
+import PrivacyToggle from "@/components/PrivacyToggle";
 
 type NavigationItem = {
   href: string;
   label: string;
   icon: LucideIcon;
   isActive: (pathname: string) => boolean;
+  /** Itens que aparecem na barra inferior do celular (máximo 5). */
+  mobile: boolean;
 };
 
 const navigationItems: NavigationItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, isActive: (pathname) => pathname === "/dashboard" },
-  { href: "/transactions", label: "Transações", icon: ArrowLeftRight, isActive: (pathname) => pathname.startsWith("/transactions") },
-  { href: "/categories", label: "Categorias", icon: Tags, isActive: (pathname) => pathname === "/categories" },
-  { href: "/profile", label: "Meu Perfil", icon: UserRound, isActive: (pathname) => pathname === "/profile" },
+  { href: "/dashboard", label: "Início", icon: LayoutDashboard, isActive: (pathname) => pathname === "/dashboard", mobile: true },
+  { href: "/transactions", label: "Transações", icon: ArrowLeftRight, isActive: (pathname) => pathname.startsWith("/transactions") || pathname === "/quick", mobile: true },
+  { href: "/goals", label: "Metas", icon: Target, isActive: (pathname) => pathname.startsWith("/goals"), mobile: true },
+  { href: "/reports", label: "Relatórios", icon: BarChart3, isActive: (pathname) => pathname.startsWith("/reports"), mobile: true },
+  { href: "/categories", label: "Categorias", icon: Tags, isActive: (pathname) => pathname === "/categories", mobile: false },
+  { href: "/profile", label: "Meu Perfil", icon: UserRound, isActive: (pathname) => pathname.startsWith("/profile"), mobile: true },
 ];
 
 export default function Navigation() {
@@ -25,7 +39,7 @@ export default function Navigation() {
 
   return (
     <>
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-zinc-800 bg-[#111113] p-5 md:flex md:flex-col">
+      <aside className="no-print fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-zinc-800 bg-[#111113] p-5 md:flex md:flex-col">
         <Link href="/dashboard" className="rounded-xl px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00]">
           <span className="block text-2xl font-semibold tracking-tight text-white">Mil</span>
           <span className="mt-1 block text-sm text-zinc-500">Controle financeiro</span>
@@ -35,12 +49,21 @@ export default function Navigation() {
           {navigationItems.map((item) => <NavigationLink key={item.href} item={item} pathname={pathname} desktop />)}
         </nav>
 
-        <div className="mt-auto border-t border-zinc-800 pt-5"><LogoutButton /></div>
+        <div className="mt-auto space-y-3 border-t border-zinc-800 pt-5">
+          <div className="flex gap-2">
+            <PrivacyToggle className="flex-1" showLabel />
+            <LogoutButton />
+          </div>
+          <Link href="/privacy" className="flex items-center gap-2 px-1 text-xs text-zinc-500 transition hover:text-zinc-300">
+            <Shield className="size-3.5" aria-hidden="true" />
+            Privacidade e termos
+          </Link>
+        </div>
       </aside>
 
-      <nav aria-label="Navegação mobile" className="fixed inset-x-0 bottom-0 z-50 border-t border-zinc-800 bg-[#111113]/95 px-2 pb-[env(safe-area-inset-bottom)] pt-1 backdrop-blur md:hidden">
-        <div className="mx-auto grid max-w-lg grid-cols-4">
-          {navigationItems.map((item) => <NavigationLink key={item.href} item={item} pathname={pathname} />)}
+      <nav aria-label="Navegação mobile" className="no-print fixed inset-x-0 bottom-0 z-50 border-t border-zinc-800 bg-[#111113]/95 px-2 pb-[env(safe-area-inset-bottom)] pt-1 backdrop-blur md:hidden">
+        <div className="mx-auto grid max-w-lg grid-cols-5">
+          {navigationItems.filter((item) => item.mobile).map((item) => <NavigationLink key={item.href} item={item} pathname={pathname} />)}
         </div>
       </nav>
     </>

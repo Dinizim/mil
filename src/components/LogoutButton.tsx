@@ -6,7 +6,7 @@ import { useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 
-export default function LogoutButton() {
+export default function LogoutButton({ showLabel = false }: { showLabel?: boolean }) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -27,9 +27,10 @@ export default function LogoutButton() {
       disabled={loading}
       className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-[#111113] px-3.5 py-2 text-sm font-medium text-zinc-300 transition hover:border-zinc-700 hover:bg-[#18181B] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00] disabled:cursor-not-allowed disabled:opacity-60"
       aria-label="Sair da conta"
+      title="Sair da conta"
     >
       <LogOut className="size-4" aria-hidden="true" />
-      <span className="hidden sm:inline">{loading ? "Saindo..." : "Sair"}</span>
+      {showLabel && <span>{loading ? "Saindo..." : "Sair"}</span>}
     </button>
   );
 }

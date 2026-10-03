@@ -1,28 +1,49 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { createTransaction, softDeleteTransaction } from "@/services/transaction.service";
+import { runAction } from "@/lib/action-result";
+import { revalidateApp } from "@/lib/revalidate";
+import type { TransactionInput } from "@/lib/validation";
+import {
+  createTransaction,
+  getExistingImportKeys,
+  importTransactions,
+  replaceTransaction,
+  softDeleteTransaction,
+} from "@/services/transaction.service";
 
-function validateTransactionInput(type: unknown, amount: unknown, description: unknown, categoryId: unknown, transactionDate: unknown) {
-  if (type !== "income" && type !== "expense") throw new Error("Tipo de transação inválido.");
-  if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) throw new Error("Informe um valor maior que zero.");
-  if (Math.round(amount * 100) !== amount * 100) throw new Error("O valor deve ter no máximo 2 casas decimais.");
-  if (typeof description !== "string" || description.length > 200) throw new Error("A descrição deve ter no máximo 200 caracteres.");
-  if (typeof categoryId !== "string" || !categoryId) throw new Error("Selecione uma categoria.");
-  if (typeof transactionDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(transactionDate) || Number.isNaN(Date.parse(`${transactionDate}T00:00:00`))) throw new Error("Informe uma data válida.");
+export async function createTransactionAction(input: TransactionInput) {
+  return runAction("Não foi possível criar a transação.", async () => {
+    const transaction = await createTransaction(input);
+    revalidateApp();
+    return transaction;
+  });
 }
 
-export async function createTransactionAction(type: "income" | "expense", amount: number, description: string, categoryId: string, transactionDate: string) {
-  validateTransactionInput(type, amount, description, categoryId, transactionDate);
-  const transaction = await createTransaction(type, amount, description, categoryId, transactionDate);
-  revalidatePath("/transactions");
-  revalidatePath("/dashboard");
-  return transaction;
+export async function updateTransactionAction(id: string, input: TransactionInput) {
+  return runAction("Não foi possível editar a transação.", async () => {
+    const transaction = await replaceTransaction(String(id), input);
+    revalidateApp();
+    return transaction;
+  });
 }
 
 export async function deleteTransactionAction(id: string) {
-  if (typeof id !== "string" || !id) throw new Error("Transação inválida.");
-  await softDeleteTransaction(id);
-  revalidatePath("/transactions");
-  revalidatePath("/dashboard");
+  return runAction("Não foi possível excluir a transação.", async () => {
+    await softDeleteTransaction(String(id));
+    revalidateApp();
+  });
+}
+
+export async function getImportKeysAction(startDate: string, endDate: string) {
+  return runAction("Não foi possível verificar transações duplicadas.", () =>
+    getExistingImportKeys(String(startDate), String(endDate))
+  );
+}
+
+export async function importTransactionsAction(rows: TransactionInput[]) {
+  return runAction("Não foi possível importar as transações.", async () => {
+    const result = await importTransactions(Array.isArray(rows) ? rows : []);
+    revalidateApp();
+    return result;
+  });
 }

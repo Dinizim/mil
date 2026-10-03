@@ -1,43 +1,28 @@
 "use client";
 
+import { AlertTriangle, RotateCcw } from "lucide-react";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { AlertTriangle, LoaderCircle } from "lucide-react";
-import { getClientErrorMessage } from "@/lib/errors";
 
-import { deactivateGoalAction } from "@/app/(dashboard)/goals/actions";
+import { deactivateGoalAction, reactivateGoalAction } from "@/app/(dashboard)/goals/actions";
+import { Alert, Modal, SubmitLabel, dangerButtonClass, primaryButtonClass, secondaryButtonClass } from "@/components/ui/form";
 
-type Props = {
-  goalId: string;
-};
+type Props = { goalId: string; mode?: "deactivate" | "reactivate" };
 
-export default function DeactivateGoalButton({
-  goalId,
-}: Props) {
-  const router = useRouter();
-
+/** Desativa (libera o dinheiro reservado) ou reativa (reserva de novo) uma meta. */
+export default function DeactivateGoalButton({ goalId, mode = "deactivate" }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const reactivating = mode === "reactivate";
 
-  async function handleDeactivate() {
-    try {
-      setIsSaving(true);
-      setErrorMessage("");
+  async function handleConfirm() {
+    setIsSaving(true);
+    setErrorMessage("");
+    const result = reactivating ? await reactivateGoalAction(goalId) : await deactivateGoalAction(goalId);
+    setIsSaving(false);
 
-      await deactivateGoalAction(goalId);
-
-      setIsOpen(false);
-      router.refresh();
-    } catch (error) {
-      console.error(error);
-
-      setErrorMessage(
-        getClientErrorMessage(error, "Não foi possível desativar a meta.")
-      );
-    } finally {
-      setIsSaving(false);
-    }
+    if (result.ok) setIsOpen(false);
+    else setErrorMessage(result.error);
   }
 
   return (
@@ -45,65 +30,39 @@ export default function DeactivateGoalButton({
       <button
         type="button"
         onClick={() => { setErrorMessage(""); setIsOpen(true); }}
-        disabled={isSaving}
-        className="rounded-xl border border-zinc-700 px-3 py-2 text-sm font-medium text-zinc-400 transition hover:border-zinc-600 hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 px-3 py-2 text-sm font-medium text-zinc-400 transition hover:border-zinc-600 hover:bg-zinc-800 hover:text-zinc-200"
       >
-        Desativar
+        {reactivating && <RotateCcw className="size-3.5" aria-hidden="true" />}
+        {reactivating ? "Reativar" : "Desativar"}
       </button>
 
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
-          onClick={() => {
-            if (!isSaving) {
-              setIsOpen(false);
-            }
-          }}
-        >
-          <div
-            role="alertdialog"
-            aria-modal="true"
-            className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-800 bg-[#18181B] p-5 text-zinc-100 shadow-2xl sm:p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex size-11 items-center justify-center rounded-xl bg-rose-400/10 text-rose-400">
-              <AlertTriangle className="size-5" aria-hidden="true" />
-            </div>
-
-            <h2 className="mt-4 text-lg font-semibold text-zinc-100">
-              Desativar meta?
-            </h2>
-
-            <p className="mt-2 text-sm leading-6 text-zinc-400">
-              A meta continuará salva no seu histórico, mas você
-              não poderá adicionar novos valores a ela.
-            </p>
-
-            {errorMessage && (<div className="mt-4 rounded-xl bg-rose-400/10 px-4 py-3 text-sm text-rose-400">{errorMessage}</div>)}
-
-            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                disabled={isSaving}
-                className="rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-zinc-800 disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                onClick={handleDeactivate}
-                disabled={isSaving}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isSaving && <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />}
-                {isSaving ? "Desativando..." : "Desativar"}
-              </button>
-            </div>
-          </div>
+      <Modal
+        open={isOpen}
+        onClose={() => setIsOpen(false)}
+        busy={isSaving}
+        role="alertdialog"
+        title={reactivating ? "Reativar meta?" : "Desativar meta?"}
+        icon={
+          reactivating ? (
+            <span className="flex size-11 items-center justify-center rounded-xl bg-[#FF7A00]/10 text-[#FF7A00]"><RotateCcw className="size-5" aria-hidden="true" /></span>
+          ) : (
+            <span className="flex size-11 items-center justify-center rounded-xl bg-rose-400/10 text-rose-400"><AlertTriangle className="size-5" aria-hidden="true" /></span>
+          )
+        }
+        description={
+          reactivating
+            ? "O dinheiro já guardado nesta meta volta a ficar reservado e sai do saldo disponível."
+            : "O dinheiro guardado nesta meta volta para o saldo disponível. A meta continua no histórico e pode ser reativada depois."
+        }
+      >
+        <Alert>{errorMessage}</Alert>
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={() => setIsOpen(false)} disabled={isSaving} className={secondaryButtonClass}>Cancelar</button>
+          <button type="button" onClick={handleConfirm} disabled={isSaving} className={reactivating ? primaryButtonClass : dangerButtonClass}>
+            <SubmitLabel loading={isSaving} idle={reactivating ? "Reativar" : "Desativar"} busy="Salvando..." />
+          </button>
         </div>
-      )}
+      </Modal>
     </>
   );
 }

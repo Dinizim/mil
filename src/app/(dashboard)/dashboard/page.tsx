@@ -7,58 +7,63 @@ import {
   Info,
   Plus,
   Wallet,
+  Zap,
 } from "lucide-react";
 
 import ExpensesByCategoryChart from "@/components/ExpensesByCategoryChart";
 import GoalsSection from "@/components/GoalsSection";
+import Money from "@/components/Money";
+import MonthNavigator from "@/components/MonthNavigator";
 import MonthlyFinancialChart from "@/components/MonthlyFinancialChart";
-import LogoutButton from "@/components/LogoutButton";
+import PrivacyToggle from "@/components/PrivacyToggle";
+import { getDisplayName } from "@/lib/auth";
+import { formatDate, formatMonthLabel, resolveMonth } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/server";
-import { getDashboardSummary } from "@/services/dashboard.service";
-import { getGoalsWithProgress } from "@/services/goal.service";
 import {
   getExpensesByCategory,
-  getLatestTransactions,
-  getMonthlyFinancialSummary,
-} from "@/services/transaction.service";
+  getFinancialSummary,
+  getMonthSummary,
+  getMonthlyEvolution,
+} from "@/services/finance.service";
+import { getGoalsWithProgress } from "@/services/goal.service";
+import { getLatestTransactions } from "@/services/transaction.service";
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
-}
-
-export default async function DashboardPage() {
+async function getUserName() {
   const supabase = await createClient();
-
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const { data: profile } = user
-    ? await supabase
-        .from("profiles")
-        .select("name")
-        .eq("id", user.id)
-        .maybeSingle()
+    ? await supabase.from("profiles").select("name").eq("id", user.id).maybeSingle()
     : { data: null };
 
-  const userName =
-    profile?.name?.trim() ||
-    user?.user_metadata?.name?.trim() ||
-    "Usuário";
+  return getDisplayName(user, profile?.name);
+}
 
-  const summary = await getDashboardSummary();
-  const latestTransactions = await getLatestTransactions(5);
-  const monthlySummary = await getMonthlyFinancialSummary();
-  const expensesByCategory = await getExpensesByCategory();
-  const goals = await getGoalsWithProgress();
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const month = resolveMonth((await searchParams).month);
+  const monthLabel = formatMonthLabel(month);
+
+  const [userName, summary, monthSummary, latestTransactions, monthlySummary, expensesByCategory, goals] =
+    await Promise.all([
+      getUserName(),
+      getFinancialSummary(),
+      getMonthSummary(month),
+      getLatestTransactions(5, month),
+      getMonthlyEvolution(month),
+      getExpensesByCategory(month),
+      getGoalsWithProgress(),
+    ]);
 
   return (
     <main className="min-h-screen bg-[#09090B] px-4 py-6 text-zinc-100 sm:px-6 sm:py-8 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        <header className="mb-8 flex flex-col gap-5 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
+        <header className="mb-8 flex flex-col gap-5 sm:mb-10 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-medium text-[#FF7A00]">
               Olá, {userName}!
@@ -71,9 +76,15 @@ export default async function DashboardPage() {
             </p>
           </div>
 
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-            <LogoutButton />
-
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+            <PrivacyToggle className="md:hidden" />
+            <Link
+              href="/quick"
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-[#111113] px-4 py-2.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-700 hover:bg-[#18181B] sm:flex-none"
+            >
+              <Zap className="size-4 text-[#FF7A00]" aria-hidden="true" />
+              Lançamento rápido
+            </Link>
             <Link
               href="/transactions"
               className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#FF7A00] px-4 py-2.5 text-sm font-semibold text-[#17110A] transition-colors hover:bg-[#FF8A1A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00] focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090B] sm:flex-none"
@@ -89,34 +100,42 @@ export default async function DashboardPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-medium text-zinc-400">Saldo total</p>
-                <p className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                  {formatCurrency(summary.balance)}
-                </p>
+                <Money value={summary.balance} className="mt-3 block text-3xl font-semibold tracking-tight text-white sm:text-4xl" />
               </div>
               <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#FF7A00]/15 text-[#FF7A00]">
                 <Wallet className="size-5" aria-hidden="true" />
               </div>
             </div>
 
-            <div className="mt-7 grid gap-3 border-t border-zinc-800 pt-5 sm:grid-cols-2">
-              <div className="rounded-xl bg-[#111113] p-4">
-                <p className="flex items-center gap-2 text-sm text-zinc-400">
-                  <ArrowDownLeft className="size-4 text-emerald-400" aria-hidden="true" />
-                  Entradas
-                </p>
-                <p className="mt-2 text-xl font-semibold text-emerald-400">
-                  {formatCurrency(summary.totalIncome)}
-                </p>
+            <div className="mt-7 border-t border-zinc-800 pt-5">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Movimento do mês</p>
+                <MonthNavigator basePath="/dashboard" month={month} />
               </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl bg-[#111113] p-4">
+                  <p className="flex items-center gap-2 text-sm text-zinc-400">
+                    <ArrowDownLeft className="size-4 text-emerald-400" aria-hidden="true" />
+                    Entradas
+                  </p>
+                  <Money value={monthSummary.totalIncome} className="mt-2 block text-xl font-semibold text-emerald-400" />
+                </div>
 
-              <div className="rounded-xl bg-[#111113] p-4">
-                <p className="flex items-center gap-2 text-sm text-zinc-400">
-                  <ArrowUpRight className="size-4 text-rose-400" aria-hidden="true" />
-                  Despesas
-                </p>
-                <p className="mt-2 text-xl font-semibold text-rose-400">
-                  {formatCurrency(summary.totalExpense)}
-                </p>
+                <div className="rounded-xl bg-[#111113] p-4">
+                  <p className="flex items-center gap-2 text-sm text-zinc-400">
+                    <ArrowUpRight className="size-4 text-rose-400" aria-hidden="true" />
+                    Despesas
+                  </p>
+                  <Money value={monthSummary.totalExpense} className="mt-2 block text-xl font-semibold text-rose-400" />
+                </div>
+
+                <div className="rounded-xl bg-[#111113] p-4">
+                  <p className="text-sm text-zinc-400">Resultado</p>
+                  <Money
+                    value={monthSummary.balance}
+                    className={"mt-2 block text-xl font-semibold " + (monthSummary.balance >= 0 ? "text-zinc-100" : "text-rose-400")}
+                  />
+                </div>
               </div>
             </div>
           </article>
@@ -126,9 +145,7 @@ export default async function DashboardPage() {
               <Info className="size-4 text-[#FF7A00]" aria-hidden="true" />
               Saldo disponível
             </p>
-            <p className="mt-4 text-3xl font-semibold tracking-tight text-white">
-              {formatCurrency(summary.availableBalance)}
-            </p>
+            <Money value={summary.availableBalance} className="mt-4 block text-3xl font-semibold tracking-tight text-white" />
             <p className="mt-3 text-sm leading-6 text-zinc-500">
               Saldo total menos o valor reservado para suas metas ativas.
             </p>
@@ -136,14 +153,12 @@ export default async function DashboardPage() {
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                 Reservado
               </p>
-              <p className="mt-1 text-lg font-semibold text-[#FF7A00]">
-                {formatCurrency(summary.totalReserved)}
-              </p>
+              <Money value={summary.totalReserved} className="mt-1 block text-lg font-semibold text-[#FF7A00]" />
             </div>
           </article>
         </section>
 
-        <GoalsSection goals={goals} />
+        <GoalsSection goals={goals} showAllLink />
 
         <section className="mt-8 grid gap-5 xl:grid-cols-2">
           <article className="rounded-2xl border border-zinc-800 bg-[#111113] p-5 shadow-sm sm:p-6">
@@ -152,14 +167,16 @@ export default async function DashboardPage() {
                 Evolução financeira
               </h2>
               <p className="mt-1 text-sm text-zinc-500">
-                Compare suas entradas e despesas ao longo dos meses.
+                Entradas e despesas nos 12 meses até {monthLabel.toLocaleLowerCase("pt-BR")}.
               </p>
             </div>
 
             {monthlySummary.length === 0 ? (
               <EmptyChartState message="Ainda não existem dados suficientes para exibir o gráfico." />
             ) : (
-              <MonthlyFinancialChart data={monthlySummary} />
+              <div className="sensitive">
+                <MonthlyFinancialChart data={monthlySummary} />
+              </div>
             )}
           </article>
 
@@ -169,14 +186,16 @@ export default async function DashboardPage() {
                 Despesas por categoria
               </h2>
               <p className="mt-1 text-sm text-zinc-500">
-                Veja onde seu dinheiro está sendo gasto.
+                Onde seu dinheiro foi em {monthLabel.toLocaleLowerCase("pt-BR")}.
               </p>
             </div>
 
             {expensesByCategory.length === 0 ? (
-              <EmptyChartState message="Ainda não existem despesas para exibir." />
+              <EmptyChartState message="Nenhuma despesa neste mês." />
             ) : (
-              <ExpensesByCategoryChart data={expensesByCategory} />
+              <div className="sensitive">
+                <ExpensesByCategoryChart data={expensesByCategory} />
+              </div>
             )}
           </article>
         </section>
@@ -188,12 +207,12 @@ export default async function DashboardPage() {
                 Últimas transações
               </h2>
               <p className="mt-1 text-sm text-zinc-500">
-                Suas movimentações mais recentes.
+                Movimentações de {monthLabel.toLocaleLowerCase("pt-BR")}.
               </p>
             </div>
 
             <Link
-              href="/transactions"
+              href={`/transactions?month=${month}`}
               className="inline-flex items-center gap-1 text-sm font-medium text-zinc-300 transition-colors hover:text-[#FF7A00] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A00]"
             >
               Ver todas
@@ -205,13 +224,13 @@ export default async function DashboardPage() {
             {latestTransactions.length === 0 ? (
               <div className="px-5 py-10 text-center sm:px-6">
                 <p className="text-sm text-zinc-400">
-                  Nenhuma transação encontrada.
+                  Nenhuma transação neste mês.
                 </p>
                 <Link
                   href="/transactions"
                   className="mt-3 inline-flex text-sm font-medium text-[#FF7A00] hover:text-[#FF8A1A]"
                 >
-                  Adicionar primeira transação
+                  Adicionar transação
                 </Link>
               </div>
             ) : (
@@ -244,24 +263,21 @@ export default async function DashboardPage() {
                           {transaction.description || "Sem descrição"}
                         </p>
                         <p className="mt-1 truncate text-xs text-zinc-500">
-                          {transaction.categories?.[0]?.name || "Sem categoria"}{" "}
+                          {transaction.categoryName}{" "}
                           <span aria-hidden="true">|</span>{" "}
-                          {new Intl.DateTimeFormat("pt-BR").format(
-                            new Date(transaction.transaction_date + "T00:00:00"),
-                          )}
+                          {formatDate(transaction.transaction_date)}
                         </p>
                       </div>
                     </div>
 
-                    <p
+                    <Money
+                      value={transaction.amount}
+                      sign={isIncome ? "+" : "-"}
                       className={
                         "shrink-0 text-sm font-semibold sm:text-base " +
                         (isIncome ? "text-emerald-400" : "text-rose-400")
                       }
-                    >
-                      {isIncome ? "+" : "-"}{" "}
-                      {formatCurrency(Number(transaction.amount))}
-                    </p>
+                    />
                   </div>
                 );
               })

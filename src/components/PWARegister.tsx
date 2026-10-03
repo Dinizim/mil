@@ -7,14 +7,9 @@ export default function PWARegister() {
     if (process.env.NODE_ENV !== "production") return;
     if (!("serviceWorker" in navigator)) return;
 
-    navigator.serviceWorker
-      .register("/sw.js", { scope: "/" })
-      .then((registration) => {
-        console.log("Service Worker registrado:", registration.scope);
-      })
-      .catch((error) => {
-        console.error("Falha ao registrar o Service Worker:", error);
-      });
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {
+      console.error("Falha ao registrar o Service Worker.");
+    });
   }, []);
 
   return null;

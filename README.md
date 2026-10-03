@@ -8,20 +8,18 @@ O projeto foi desenvolvido com foco em uma experiência **mobile-first**, interf
 
 ## Funcionalidades
 
-- Cadastro e login de usuários
-- Controle de receitas e despesas
-- Dashboard financeiro
-- Visualização do saldo total
-- Visualização do saldo disponível e reservado
-- Criação e acompanhamento de metas
-- Contribuições para metas financeiras
+- Cadastro e login com e-mail ou Google, recuperação e troca de senha
+- Controle de receitas e despesas, com filtros, busca e navegação por mês
+- Edição de transações (o lançamento original é cancelado e preservado no histórico)
+- Lançamento rápido em texto livre ("mercado 85") e atalho no app instalado
+- Importação de extrato OFX/CSV com detecção de duplicadas
+- Dashboard com saldo total, disponível e reservado, mês a mês
+- Metas com valor mensal sugerido, ritmo (no ritmo, atrasada, adiantada), histórico de aportes, edição e reativação
+- Relatórios mensais comparados à média dos 3 meses anteriores, exportação em CSV e PDF
+- Modo privacidade para ocultar valores
+- LGPD: política de privacidade, termos, exportar meus dados (JSON/CSV) e excluir minha conta
 - Gerenciamento de categorias
-- Edição de transações e cancelamento com soft delete
-- Perfil do usuário
-- Interface responsiva
-- Navegação mobile
-- PWA
-- Página offline
+- Interface responsiva, navegação mobile, PWA e página offline
 - Row Level Security (RLS)
 
 ## Tecnologias
@@ -79,8 +77,9 @@ src/
 │   └── supabase/
 │
 ├── services/
+│   ├── account.service.ts
 │   ├── category.services.ts
-│   ├── dashboard.service.ts
+│   ├── finance.service.ts
 │   ├── goal.service.ts
 │   └── transaction.service.ts
 │
@@ -213,7 +212,32 @@ Configure as credenciais do seu projeto Supabase.
 
 > O arquivo `.env.local` não deve ser enviado para o GitHub.
 
-### 5. Execute o projeto
+Variáveis:
+
+| Variável | Para quê |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Conexão com o Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | Só no servidor, para excluir a conta do usuário |
+| `NEXT_PUBLIC_PRIVACY_EMAIL` | Contato de privacidade exibido no app |
+
+Para o login com Google, ative o provedor Google no painel do Supabase e inclua `https://SEU-DOMINIO/auth/callback` (e `http://localhost:3000/auth/callback`) em *Authentication → URL Configuration → Redirect URLs*. Os links de recuperação de senha e de troca de e-mail usam a mesma rota.
+
+### 5. Banco de dados
+
+O schema (tabelas, RLS, triggers e funções) está versionado em `supabase/migrations`. Em um projeto novo:
+
+```bash
+npx supabase link --project-ref SEU_PROJECT_REF
+npx supabase db push
+```
+
+No projeto que já existe, marque a migration inicial como aplicada:
+
+```bash
+npx supabase migration repair --status applied 20260930000000
+```
+
+### 6. Execute o projeto
 
 ```bash
 npm run dev
@@ -224,6 +248,16 @@ A aplicação estará disponível em:
 ```text
 http://localhost:3000
 ```
+
+## Qualidade
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+```
+
+As regras de dinheiro, datas, saldo, metas, importação de extrato e lançamento rápido ficam em `src/lib` como funções puras e têm testes unitários.
 
 ## Build de produção
 
@@ -250,8 +284,8 @@ npm start
 - [x] Navegação mobile
 - [x] PWA
 - [ ] Deploy em produção
-- [ ] Melhorias nos relatórios
-- [ ] Testes automatizados
+- [x] Melhorias nos relatórios
+- [x] Testes automatizados (Vitest) e CI no GitHub Actions
 - [ ] Melhorias de performance
 
 ## Objetivo do projeto
